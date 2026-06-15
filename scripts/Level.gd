@@ -42,11 +42,14 @@ var player_elev: int = 0
 @onready var entities_root: Node2D = $EntitiesRoot
 @onready var player:        Node2D = $EntitiesRoot/Player
 
-var block_scene: PackedScene = preload("res://scenes/Block.tscn")
+var block_scene: PackedScene  # loaded in _ready so a missing file doesn't kill the script
 
 signal level_complete
 
 func _ready() -> void:
+	block_scene = load("res://scenes/Block.tscn")
+	if block_scene == null:
+		push_error("Level: could not load res://scenes/Block.tscn — create the scene first")
 	_build_level()
 	_render_tiles()
 	_init_entities()
@@ -168,10 +171,12 @@ func _add_tile(pos: Vector2i, elev: int) -> void:
 # =============================================================================
 
 func _init_entities() -> void:
-	_spawn_block(Vector2i(1, 0))
-
+	# Wire player first so input works even if block spawning fails
 	player.level = self
 	player.set_grid_pos(player_pos, player_elev)
+
+	if block_scene != null:
+		_spawn_block(Vector2i(1, 0))
 
 func _spawn_block(pos: Vector2i) -> void:
 	var block: Node2D = block_scene.instantiate()

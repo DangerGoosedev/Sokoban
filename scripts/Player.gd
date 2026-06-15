@@ -37,14 +37,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_grid_pos(pos: Vector2i, elev: int) -> void:
 	grid_pos = pos
 	elevation = elev
-	position = grid_to_screen(pos, elev)
+	position = level.grid_to_screen(pos, elev)  # use Level's version so ORIGIN matches
 	z_index = pos.x + pos.y + 100
-
-func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
-	return Vector2(
-		(pos.x - pos.y) * TILE_W * 0.5,
-		(pos.x + pos.y) * TILE_H * 0.5 - elev * ELEV_H
-	)
 
 # --- Placeholder visual (replace with sprite later) ---
 func _build_visual() -> void:
