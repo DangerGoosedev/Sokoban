@@ -24,6 +24,8 @@ const C_GOAL       := Color(1.00, 0.85, 0.10)
 # Screen offset so col 0 / row 0 isn't in the corner
 const ORIGIN := Vector2(120.0, 80.0)
 
+@export var tile_registry: TileRegistry  # assign in Inspector to use sprites
+
 # --- Grid state ---
 # floor_map : Vector2i -> int   (ground elevation at that tile; absent = gap/void)
 # ramp_map  : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
@@ -109,6 +111,16 @@ func _render_tiles() -> void:
 	for pos in positions:
 		_add_tile(pos, floor_map[pos])
 
+func _tile_type(pos: Vector2i, elev: int, is_ramp: bool, is_goal: bool) -> String:
+	if is_goal: return "goal"
+	if is_ramp:
+		var d: Vector2i = ramp_map[pos].up_dir
+		if   d == DIR_RIGHT: return "ramp_right"
+		elif d == DIR_LEFT:  return "ramp_left"
+		elif d == DIR_UP:    return "ramp_up"
+		else:                return "ramp_down"
+	return "floor_high" if elev > 0 else "floor"
+
 func _add_tile(pos: Vector2i, elev: int) -> void:
 	var node := Node2D.new()
 	tiles_root.add_child(node)
@@ -120,7 +132,16 @@ func _add_tile(pos: Vector2i, elev: int) -> void:
 	var is_ramp := ramp_map.has(pos)
 	var is_goal := (pos == goal_pos)
 
-	# --- Top face ---
+	# --- Sprite path (TileRegistry assigned) ---
+	if tile_registry != null:
+		var sprite := tile_registry.make_sprite(_tile_type(pos, elev, is_ramp, is_goal))
+		if sprite != null:
+			node.add_child(sprite)
+			if elev > 0:
+				_add_walls(node, elev, hw, hh)
+			return
+
+	# --- Polygon fallback ---
 	var top_color: Color
 	if   is_goal:  top_color = C_GOAL
 	elif is_ramp:  top_color = C_RAMP
@@ -130,14 +151,11 @@ func _add_tile(pos: Vector2i, elev: int) -> void:
 	var top := Polygon2D.new()
 	node.add_child(top)
 	top.polygon = PackedVector2Array([
-		Vector2(  0, -hh),
-		Vector2( hw,   0),
-		Vector2(  0,  hh),
-		Vector2(-hw,   0),
+		Vector2(  0, -hh), Vector2( hw,   0),
+		Vector2(  0,  hh), Vector2(-hw,   0),
 	])
 	top.color = top_color
 
-	# Ramp: shade the uphill half darker so the slope reads clearly
 	if is_ramp:
 		var hint := Polygon2D.new()
 		node.add_child(hint)
@@ -146,25 +164,29 @@ func _add_tile(pos: Vector2i, elev: int) -> void:
 		])
 		hint.color = C_RAMP.darkened(0.18)
 
-	# --- Side walls for elevated tiles ---
 	if elev > 0:
-		var wh := float(elev) * ELEV_H
+		_add_walls(node, elev, hw, hh)
 
-		var left_wall := Polygon2D.new()
-		node.add_child(left_wall)
-		left_wall.polygon = PackedVector2Array([
-			Vector2(-hw,       0), Vector2(  0,       hh),
-			Vector2(  0, hh + wh), Vector2(-hw,       wh),
-		])
-		left_wall.color = C_HIGH_LEFT
+# Side-wall polygons drawn below the top face of any elevated tile.
+# Called by both the sprite path and the polygon fallback.
+func _add_walls(node: Node2D, elev: int, hw: float, hh: float) -> void:
+	var wh := float(elev) * ELEV_H
 
-		var right_wall := Polygon2D.new()
-		node.add_child(right_wall)
-		right_wall.polygon = PackedVector2Array([
-			Vector2(  0,       hh), Vector2(hw,        0),
-			Vector2( hw,       wh), Vector2( 0, hh + wh),
-		])
-		right_wall.color = C_HIGH_RIGHT
+	var left_wall := Polygon2D.new()
+	node.add_child(left_wall)
+	left_wall.polygon = PackedVector2Array([
+		Vector2(-hw,       0), Vector2(  0,       hh),
+		Vector2(  0, hh + wh), Vector2(-hw,       wh),
+	])
+	left_wall.color = C_HIGH_LEFT
+
+	var right_wall := Polygon2D.new()
+	node.add_child(right_wall)
+	right_wall.polygon = PackedVector2Array([
+		Vector2(  0,       hh), Vector2(hw,        0),
+		Vector2( hw,       wh), Vector2( 0, hh + wh),
+	])
+	right_wall.color = C_HIGH_RIGHT
 
 # =============================================================================
 # Entity initialisation
@@ -180,6 +202,7 @@ func _init_entities() -> void:
 
 func _spawn_block(pos: Vector2i) -> void:
 	var block: Node2D = block_scene.instantiate()
+	block.tile_registry = tile_registry  # set before add_child so _ready() can use it
 	entities_root.add_child(block)
 	block_map[pos] = block
 	block.level = self
