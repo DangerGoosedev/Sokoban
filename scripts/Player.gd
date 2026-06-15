@@ -1,9 +1,9 @@
 extends Node2D
 
 # --- Isometric constants (must match Level.gd) ---
-const TILE_W := 64.0
-const TILE_H := 32.0
-const ELEV_H := 20.0
+const TILE_W := 32.0
+const TILE_H := 16.0
+const ELEV_H := 12.0
 
 # --- Grid state ---
 var grid_pos := Vector2i.ZERO

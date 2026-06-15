@@ -1,9 +1,9 @@
 extends Node2D
 
 # --- Isometric constants (shared with Player.gd / Block.gd) ---
-const TILE_W := 64.0
-const TILE_H := 32.0
-const ELEV_H := 20.0
+const TILE_W := 32.0
+const TILE_H := 16.0
+const ELEV_H := 12.0
 
 # Grid direction vectors
 const DIR_RIGHT := Vector2i( 1,  0)
