@@ -33,8 +33,7 @@ var player_elev: int = 0
 @export var player_start_cell: Vector2i = Vector2i(0, 0)
 @export var block_spawn_cells: Array[Vector2i] = []
 
-@onready var entities_root: Node2D = $EntitiesRoot
-@onready var player:        Node2D = $EntitiesRoot/Player
+@onready var player: Node2D = $EntitiesRoot/Player
 
 # Built from the three exports above in _ready()
 var _layers: Array[TileMapLayer] = []
@@ -66,6 +65,12 @@ func _ready() -> void:
 	if _layers.is_empty():
 		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
 		return
+
+	# Y-sort so draw order between tiles, the player, and blocks follows
+	# screen depth (global Y) instead of a fixed per-node z_index.
+	y_sort_enabled = true
+	for l in _layers:
+		l.y_sort_enabled = true
 
 	_check_available_custom_data()
 	_build_level_from_tilemap()
@@ -191,6 +196,9 @@ func _init_entities() -> void:
 	player_pos  = player_start_cell
 	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
+	# Player is scene-placed under EntitiesRoot for organisation; pull it up
+	# to be a direct child of Level so Y-sort can compare it against tiles.
+	player.reparent(self)
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
@@ -199,7 +207,7 @@ func _init_entities() -> void:
 
 func _spawn_block(pos: Vector2i) -> void:
 	var block: Node2D = block_scene.instantiate()
-	entities_root.add_child(block)
+	add_child(block)
 	block_map[pos] = block
 	block.level = self
 	block.set_grid_pos(pos, floor_map.get(pos, 0))

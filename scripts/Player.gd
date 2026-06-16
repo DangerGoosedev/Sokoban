@@ -40,7 +40,6 @@ func set_grid_pos(pos: Vector2i, elev: int) -> void:
 	grid_pos = pos
 	elevation = elev
 	position = level.grid_to_screen(pos, elev)  # use Level's version so ORIGIN matches
-	z_index = pos.x + pos.y + 100
 	print("Player: grid_pos=%s elev=%d -> position=%s global_position=%s z_index=%d visible=%s" % [pos, elev, position, global_position, z_index, visible])
 
 # --- Placeholder visual (replace with sprite later) ---
