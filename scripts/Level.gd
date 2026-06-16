@@ -133,15 +133,18 @@ func _build_level_from_tilemap() -> void:
 				ramp_map[cell] = {"up_dir": DIR_UP,   "base": elev}
 				print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
 
-			# Two named wall bools — tick one or both to wall off that side
-			# (e.g. the outer rim of a platform, or the missing half of a
-			# corner tile where the platform doesn't cover the full diamond).
-			# Blocks movement across that face in BOTH directions.
-			#   block_left  → wall facing lower-left  (sw)
-			#   block_right → wall facing lower-right (se)
+			# Four named wall bools, one per diamond edge — tick whichever
+			# ones border the missing wedge on this tile (e.g. a corner
+			# platform tile that doesn't cover the full diamond, or the
+			# outer rim of a platform). A cut corner needs its two adjacent
+			# edges ticked together; an edge tile along a straight rim
+			# needs just one. Blocks movement across that face in BOTH
+			# directions. Named to match the move_ne/nw/se/sw actions.
 			var blocked_exits: Array = []
-			if _tile_bool(td, "block_left"):  blocked_exits.append(DIR_DOWN)
-			if _tile_bool(td, "block_right"): blocked_exits.append(DIR_RIGHT)
+			if _tile_bool(td, "block_ne"): blocked_exits.append(DIR_UP)
+			if _tile_bool(td, "block_se"): blocked_exits.append(DIR_RIGHT)
+			if _tile_bool(td, "block_sw"): blocked_exits.append(DIR_DOWN)
+			if _tile_bool(td, "block_nw"): blocked_exits.append(DIR_LEFT)
 			if not blocked_exits.is_empty():
 				wall_map[cell] = blocked_exits
 				print("Level: registered wall at %s, blocked=%s" % [cell, blocked_exits])
