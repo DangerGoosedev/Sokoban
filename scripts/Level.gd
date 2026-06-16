@@ -137,13 +137,14 @@ func _build_level_from_tilemap() -> void:
 			# (e.g. the outer rim of a platform, or the missing half of a
 			# corner tile where the platform doesn't cover the full diamond).
 			# Blocks movement across that face in BOTH directions.
-			#   block_left  → wall facing upper-left
-			#   block_right → wall facing lower-right
+			#   block_left  → wall facing lower-left  (sw)
+			#   block_right → wall facing lower-right (se)
 			var blocked_exits: Array = []
-			if _tile_bool(td, "block_left"):  blocked_exits.append(DIR_LEFT)
+			if _tile_bool(td, "block_left"):  blocked_exits.append(DIR_DOWN)
 			if _tile_bool(td, "block_right"): blocked_exits.append(DIR_RIGHT)
 			if not blocked_exits.is_empty():
 				wall_map[cell] = blocked_exits
+				print("Level: registered wall at %s, blocked=%s" % [cell, blocked_exits])
 
 
 # =============================================================================
