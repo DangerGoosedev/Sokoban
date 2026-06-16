@@ -6,6 +6,8 @@ const ELEV_H := 12.0  # pixels per elevation unit — must match Block.gd / Play
 
 const DIR_RIGHT := Vector2i( 1,  0)
 const DIR_LEFT  := Vector2i(-1,  0)
+const DIR_UP    := Vector2i( 0, -1)
+const DIR_DOWN  := Vector2i( 0,  1)
 
 # floor_map     : Vector2i -> int   (ground elevation; absent = gap/void)
 # ramp_map      : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
@@ -117,18 +119,18 @@ func _build_level_from_tilemap() -> void:
 				goal_pos  = cell
 				goal_elev = elev
 
-			# Two named ramp bools — ramps only ever run along the left/right
-			# diagonal. Tick the one matching the direction the player
-			# presses to walk UP this ramp.
-			#   ramp_left  → press move_nw (character moves upper-left)
-			#   ramp_right → press move_se (character moves lower-right)
+			# Two named ramp bools — ramps run along the up/down diagonal.
+			# Tick the one matching the direction the player presses to
+			# walk UP this ramp.
+			#   ramp_left  → press move_sw (character moves lower-left)
+			#   ramp_right → press move_ne (character moves upper-right)
 			# The ramp tile must be on the HIGHER elevation layer (the destination level).
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
 			if   _tile_bool(td, "ramp_left"):
-				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
+				ramp_map[cell] = {"up_dir": DIR_DOWN, "base": elev}
 				print("Level: registered ramp_left at %s, base=%d" % [cell, elev])
 			elif _tile_bool(td, "ramp_right"):
-				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
+				ramp_map[cell] = {"up_dir": DIR_UP,   "base": elev}
 				print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
 
 			# Two named wall bools — tick one or both to wall off that side
