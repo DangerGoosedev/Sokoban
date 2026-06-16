@@ -39,8 +39,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_grid_pos(pos: Vector2i, elev: int) -> void:
 	grid_pos = pos
 	elevation = elev
-	# Move into this elevation's layer so its Y-sort can compare us against tiles.
-	reparent(level.get_elev_layer(elev))
 	global_position = level.to_global(level.grid_to_screen(pos, elev))
 	print("Player: grid_pos=%s elev=%d -> position=%s global_position=%s z_index=%d visible=%s" % [pos, elev, position, global_position, z_index, visible])
 

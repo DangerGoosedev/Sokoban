@@ -66,10 +66,14 @@ func _ready() -> void:
 		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
 		return
 
-	# Godot only Y-sorts a TileMapLayer's tiles against nodes that are
-	# DIRECT CHILDREN of that same layer — siblings aren't considered, even
-	# with y_sort_enabled set elsewhere (godotengine/godot#69261). Player and
-	# Block get reparented into the matching layer in set_grid_pos() below.
+	# Y-sort so draw order between entities (player, blocks) follows screen
+	# depth (global Y) instead of a fixed per-node z_index. Tiles within a
+	# layer Y-sort against each other too, but NOT against entities on a
+	# different layer — TileMapLayer only Y-sorts tiles against its own
+	# direct child nodes (godotengine/godot#69261). Anything that needs to
+	# dynamically occlude/be occluded by the player (a raised obstacle with
+	# a visible face, etc.) should be its own entity like Block, not a tile.
+	y_sort_enabled = true
 	for l in _layers:
 		l.y_sort_enabled = true
 
@@ -199,6 +203,7 @@ func _init_entities() -> void:
 	player_pos  = player_start_cell
 	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
+	player.reparent(self)
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
