@@ -101,6 +101,13 @@ func _build_level_from_tilemap() -> void:
 			elif bool(td.get_custom_data("ramp_nw")):
 				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
 
+	print("Level loaded: %d floor tiles, %d ramp(s)" % [floor_map.size(), ramp_map.size()])
+	for cell: Vector2i in ramp_map:
+		var r: Dictionary = ramp_map[cell]
+		print("  ramp at %s  up_dir=%s  base_elev=%d" % [cell, r.up_dir, r.base])
+	if ramp_map.is_empty():
+		push_warning("Level: no ramps found — make sure ramp tiles have ramp_ne/se/sw/nw custom data set to true in the TileSet")
+
 # =============================================================================
 # Coordinate conversion — delegates to TileMap so entities align with tiles
 # =============================================================================
@@ -170,6 +177,7 @@ func _resolve_step(from_elev: int, to_pos: Vector2i,
 		dest_surface: int, dir: Vector2i) -> int:
 	if ramp_map.has(to_pos):
 		var r: Dictionary = ramp_map[to_pos]
+		print("Ramp at %s: need up_dir=%s(got %s) base=%d(at %d)" % [to_pos, r.up_dir, dir, r.base, from_elev])
 		if r.up_dir == dir and r.base == from_elev:
 			return from_elev + 1
 	var diff := dest_surface - from_elev
