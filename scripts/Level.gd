@@ -221,9 +221,12 @@ func request_move(dir: Vector2i) -> void:
 	if wall_map.has(to_pos) and -dir in wall_map[to_pos]:
 		return
 
-	if block_map.has(to_pos) and floor_map.has(to_pos):
-		if not _try_push(to_pos, dir):
+	if block_map.has(to_pos):
+		if not floor_map.has(to_pos):
+			print("Move: block at %s sits on a void cell, no floor entry — push skipped" % [to_pos])
+		elif not _try_push(to_pos, dir):
 			return
+	print("Move: dir=%s to_pos=%s block_map_keys=%s" % [dir, to_pos, block_map.keys()])
 
 	var dest_elev := _surface_elev(to_pos)
 	if dest_elev < 0:
@@ -269,19 +272,24 @@ func _resolve_step(from_elev: int, to_pos: Vector2i,
 func _try_push(block_pos: Vector2i, dir: Vector2i) -> bool:
 	var block_base: int = floor_map.get(block_pos, 0)
 	if player_elev != block_base:
+		print("Push blocked: player_elev=%d != block_base=%d" % [player_elev, block_base])
 		return false
 	var dest := block_pos + dir
 	if blocked_cells.has(dest):
+		print("Push blocked: dest %s is in blocked_cells" % [dest])
 		return false
 	if block_map.has(dest):
+		print("Push blocked: dest %s already has a block" % [dest])
 		return false
 	var dest_floor: int = floor_map.get(dest, -1)
 	if dest_floor > block_base:
+		print("Push blocked: dest_floor=%d > block_base=%d" % [dest_floor, block_base])
 		return false
 	var block: Node2D = block_map[block_pos]
 	block_map.erase(block_pos)
 	block_map[dest] = block
 	block.set_grid_pos(dest, 0 if dest_floor < 0 else dest_floor)
+	print("Pushed block %s -> %s" % [block_pos, dest])
 	return true
 
 # =============================================================================
