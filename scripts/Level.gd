@@ -20,13 +20,17 @@ var goal_elev: int
 var player_pos:  Vector2i
 var player_elev: int = 0
 
-# Assign your TileMapLayers here in the Inspector, index = elevation level.
-# e.g. index 0 = ground floor, index 1 = one step up, index 2 = two steps up.
-# Each layer should be offset upward by ELEV_H per level (set in the editor).
-@export var elevation_layers: Array[TileMapLayer] = []
+# Drag each TileMapLayer from the Scene panel into these slots in the Inspector.
+# (Select the Level node — the root — to see these, not the TileMap node.)
+@export var layer_elev_0: TileMapLayer  # ground floor
+@export var layer_elev_1: TileMapLayer  # one step up
+@export var layer_elev_2: TileMapLayer  # two steps up
 
 @onready var entities_root: Node2D = $EntitiesRoot
 @onready var player:        Node2D = $EntitiesRoot/Player
+
+# Built from the three exports above in _ready()
+var _layers: Array[TileMapLayer] = []
 
 var block_scene: PackedScene
 
@@ -36,6 +40,17 @@ func _ready() -> void:
 	block_scene = load("res://scenes/Block.tscn")
 	if block_scene == null:
 		push_error("Level: could not load res://scenes/Block.tscn")
+
+	# Collect only the layers that were assigned in the Inspector
+	_layers.clear()
+	for l: TileMapLayer in [layer_elev_0, layer_elev_1, layer_elev_2]:
+		if l != null:
+			_layers.append(l)
+
+	if _layers.is_empty():
+		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
+		return
+
 	_build_level_from_tilemap()
 	_init_entities()
 
@@ -47,13 +62,8 @@ func _build_level_from_tilemap() -> void:
 	floor_map.clear()
 	ramp_map.clear()
 
-	if elevation_layers.is_empty():
-		push_error("Level: elevation_layers is empty — assign your TileMapLayers in the Inspector")
-		return
-
-	# Each layer's index is its logical elevation (layer 0 = elev 0, layer 1 = elev 1, …)
-	for elev in elevation_layers.size():
-		var layer := elevation_layers[elev]
+	for elev in _layers.size():
+		var layer := _layers[elev]
 		if layer == null:
 			continue
 		for cell: Vector2i in layer.get_used_cells():
@@ -82,8 +92,8 @@ func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
 	# Use the correct layer for this elevation, then convert its local-space
 	# tile centre all the way back to Level's local space (handles any layer
 	# offsets the user has set in the editor for the visual elevation look).
-	var idx   := clampi(elev, 0, elevation_layers.size() - 1)
-	var layer := elevation_layers[idx]
+	var idx   := clampi(elev, 0, _layers.size() - 1)
+	var layer := _layers[idx]
 	return to_local(layer.to_global(layer.map_to_local(pos)))
 
 # =============================================================================
