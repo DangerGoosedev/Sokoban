@@ -66,9 +66,10 @@ func _ready() -> void:
 		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
 		return
 
-	# Y-sort so draw order between tiles, the player, and blocks follows
-	# screen depth (global Y) instead of a fixed per-node z_index.
-	y_sort_enabled = true
+	# Godot only Y-sorts a TileMapLayer's tiles against nodes that are
+	# DIRECT CHILDREN of that same layer — siblings aren't considered, even
+	# with y_sort_enabled set elsewhere (godotengine/godot#69261). Player and
+	# Block get reparented into the matching layer in set_grid_pos() below.
 	for l in _layers:
 		l.y_sort_enabled = true
 
@@ -182,11 +183,13 @@ func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
 	# Use the correct layer for this elevation, then convert its local-space
 	# tile centre all the way back to Level's local space (handles any layer
 	# offsets the user has set in the editor for the visual elevation look).
-	var idx   := clampi(elev, 0, _layers.size() - 1)
-	var layer := _layers[idx]
+	var layer := get_elev_layer(elev)
 	# map_to_local returns the top vertex of the isometric diamond;
 	# add half tile height to reach the visual centre.
 	return to_local(layer.to_global(layer.map_to_local(pos))) + Vector2(0.0, TILE_H * 0.5)
+
+func get_elev_layer(elev: int) -> TileMapLayer:
+	return _layers[clampi(elev, 0, _layers.size() - 1)]
 
 # =============================================================================
 # Entity initialisation
@@ -196,9 +199,6 @@ func _init_entities() -> void:
 	player_pos  = player_start_cell
 	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
-	# Player is scene-placed under EntitiesRoot for organisation; pull it up
-	# to be a direct child of Level so Y-sort can compare it against tiles.
-	player.reparent(self)
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
