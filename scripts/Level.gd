@@ -91,7 +91,8 @@ func _build_level_from_tilemap() -> void:
 			#   ramp_se → press move_right (character moves lower-right)
 			#   ramp_sw → press move_down  (character moves lower-left)
 			#   ramp_nw → press move_left  (character moves upper-left)
-			# The ramp tile must be on the LOWER elevation layer (the base level).
+			# The ramp tile must be on the HIGHER elevation layer (the destination level).
+			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
 			if   bool(td.get_custom_data("ramp_ne")):
 				ramp_map[cell] = {"up_dir": DIR_UP,    "base": elev}
 			elif bool(td.get_custom_data("ramp_se")):
@@ -177,9 +178,9 @@ func _resolve_step(from_elev: int, to_pos: Vector2i,
 		dest_surface: int, dir: Vector2i) -> int:
 	if ramp_map.has(to_pos):
 		var r: Dictionary = ramp_map[to_pos]
-		print("Ramp at %s: need up_dir=%s(got %s) base=%d(at %d)" % [to_pos, r.up_dir, dir, r.base, from_elev])
-		if r.up_dir == dir and r.base == from_elev:
-			return from_elev + 1
+		print("Ramp at %s: need up_dir=%s(got %s) base-1=%d(at %d)" % [to_pos, r.up_dir, dir, r.base - 1, from_elev])
+		if r.up_dir == dir and r.base - 1 == from_elev:
+			return r.base
 	var diff := dest_surface - from_elev
 	if diff > 0: return -1
 	if diff < -1: return -1
