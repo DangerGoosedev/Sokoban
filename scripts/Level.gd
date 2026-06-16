@@ -1,5 +1,7 @@
 extends Node2D
 
+const TILE_W := 32.0
+const TILE_H := 16.0
 const ELEV_H := 12.0  # pixels per elevation unit — must match Block.gd / Player.gd
 
 const DIR_RIGHT := Vector2i( 1,  0)
@@ -109,7 +111,9 @@ func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
 	# offsets the user has set in the editor for the visual elevation look).
 	var idx   := clampi(elev, 0, _layers.size() - 1)
 	var layer := _layers[idx]
-	return to_local(layer.to_global(layer.map_to_local(pos)))
+	# map_to_local returns the top vertex of the isometric diamond;
+	# add half tile height to reach the visual centre.
+	return to_local(layer.to_global(layer.map_to_local(pos))) + Vector2(0.0, TILE_H * 0.5)
 
 # =============================================================================
 # Entity initialisation
