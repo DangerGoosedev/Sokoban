@@ -4,15 +4,11 @@ const TILE_W := 32.0
 const TILE_H := 16.0
 const ELEV_H := 12.0  # pixels per elevation unit — must match Block.gd / Player.gd
 
-const DIR_RIGHT := Vector2i( 1,  0)
-const DIR_LEFT  := Vector2i(-1,  0)
-const DIR_UP    := Vector2i( 0, -1)
-const DIR_DOWN  := Vector2i( 0,  1)
-
 # floor_map     : Vector2i -> int   (ground elevation; absent = gap/void)
 # ramp_map      : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
 # block_map     : Vector2i -> Node  (Block node at that cell)
-# wall_map      : Vector2i -> Array (blocked exit directions, from block_left/right)
+# wall_map      : Vector2i -> Array (blocked exit directions, derived from the
+#                  tile's TileSet Physics Layer 0 collision shape)
 # blocked_cells : Vector2i -> true  (whole cell excluded from play, from is_blocked)
 var floor_map: Dictionary = {}
 var ramp_map:  Dictionary = {}
@@ -50,6 +46,10 @@ var block_scene: PackedScene
 # spamming "invalid custom data layer" errors.
 var _available_custom_data: Dictionary = {}
 
+# Whether the TileSet has a Physics Layer 0 at all — without one, tiles have
+# no collision shape to read, so every tile is treated as a full diamond.
+var _has_physics_layer: bool = false
+
 signal level_complete
 
 func _ready() -> void:
@@ -78,6 +78,10 @@ func _check_available_custom_data() -> void:
 	for i in ts.get_custom_data_layers_count():
 		_available_custom_data[ts.get_custom_data_layer_name(i)] = true
 	print("Level: available custom data layers = ", _available_custom_data.keys())
+
+	_has_physics_layer = ts.get_physics_layers_count() > 0
+	if not _has_physics_layer:
+		print("Level: TileSet has no Physics Layer — add one (TileSet panel > Physics Layers) and draw collision shapes to get corner/edge walls")
 
 func _tile_bool(td: TileData, data_name: String) -> bool:
 	if not _available_custom_data.has(data_name):
@@ -127,28 +131,43 @@ func _build_level_from_tilemap() -> void:
 			# The ramp tile must be on the HIGHER elevation layer (the destination level).
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
 			if   _tile_bool(td, "ramp_left"):
-				ramp_map[cell] = {"up_dir": DIR_DOWN, "base": elev}
+				ramp_map[cell] = {"up_dir": IsoDir.SW, "base": elev}
 				print("Level: registered ramp_left at %s, base=%d" % [cell, elev])
 			elif _tile_bool(td, "ramp_right"):
-				ramp_map[cell] = {"up_dir": DIR_UP,   "base": elev}
+				ramp_map[cell] = {"up_dir": IsoDir.NE, "base": elev}
 				print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
 
-			# Four named wall bools, one per diamond edge — tick whichever
-			# ones border the missing wedge on this tile (e.g. a corner
-			# platform tile that doesn't cover the full diamond, or the
-			# outer rim of a platform). A cut corner needs its two adjacent
-			# edges ticked together; an edge tile along a straight rim
-			# needs just one. Blocks movement across that face in BOTH
-			# directions. Named to match the move_ne/nw/se/sw actions.
-			var blocked_exits: Array = []
-			if _tile_bool(td, "block_ne"): blocked_exits.append(DIR_UP)
-			if _tile_bool(td, "block_se"): blocked_exits.append(DIR_RIGHT)
-			if _tile_bool(td, "block_sw"): blocked_exits.append(DIR_DOWN)
-			if _tile_bool(td, "block_nw"): blocked_exits.append(DIR_LEFT)
+			# Walls come from the tile's own collision shape instead of
+			# hand-set flags — see _walls_from_collision().
+			var blocked_exits := _walls_from_collision(cell, td)
 			if not blocked_exits.is_empty():
 				wall_map[cell] = blocked_exits
-				print("Level: registered wall at %s, blocked=%s" % [cell, blocked_exits])
 
+# Walls are derived from the tile's TileSet Physics Layer 0 collision shape
+# instead of hand-ticked flags: draw the WALKABLE portion of the tile (e.g.
+# 3/4 of the diamond, for a cut corner) as a collision polygon in the
+# TileSet editor. A tile with no polygon at all is treated as a full,
+# wall-free diamond. We sample the midpoint of each of the 4 diamond edges
+# in the tile's local pixel space (origin at the top-left of its bounding
+# box, same as its texture/atlas rect) — a midpoint that falls outside the
+# polygon means that edge is missing, so movement across it is blocked.
+func _walls_from_collision(cell: Vector2i, td: TileData) -> Array:
+	var blocked: Array = []
+	if not _has_physics_layer or td.get_collision_polygons_count(0) == 0:
+		return blocked
+
+	var polygon := td.get_collision_polygon_points(0, 0)
+	var edge_mid := {
+		IsoDir.NW: Vector2(TILE_W * 0.25, TILE_H * 0.25),
+		IsoDir.NE: Vector2(TILE_W * 0.75, TILE_H * 0.25),
+		IsoDir.SE: Vector2(TILE_W * 0.75, TILE_H * 0.75),
+		IsoDir.SW: Vector2(TILE_W * 0.25, TILE_H * 0.75),
+	}
+	for dir: Vector2i in edge_mid:
+		if not Geometry2D.is_point_in_polygon(edge_mid[dir], polygon):
+			blocked.append(dir)
+	print("Level: %s collision polygon=%s -> blocked=%s" % [cell, polygon, blocked])
+	return blocked
 
 # =============================================================================
 # Coordinate conversion — delegates to TileMap so entities align with tiles
@@ -196,7 +215,7 @@ func request_move(dir: Vector2i) -> void:
 	if blocked_cells.has(to_pos):
 		return
 
-	# Wall check — a block_* flag on either tile makes that shared face solid.
+	# Wall check — a collision-derived wall on either tile makes that shared face solid.
 	if wall_map.has(player_pos) and dir in wall_map[player_pos]:
 		return
 	if wall_map.has(to_pos) and -dir in wall_map[to_pos]:
