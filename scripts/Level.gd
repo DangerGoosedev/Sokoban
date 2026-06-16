@@ -6,13 +6,11 @@ const ELEV_H := 12.0  # pixels per elevation unit — must match Block.gd / Play
 
 const DIR_RIGHT := Vector2i( 1,  0)
 const DIR_LEFT  := Vector2i(-1,  0)
-const DIR_UP    := Vector2i( 0, -1)
-const DIR_DOWN  := Vector2i( 0,  1)
 
 # floor_map     : Vector2i -> int   (ground elevation; absent = gap/void)
 # ramp_map      : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
 # block_map     : Vector2i -> Node  (Block node at that cell)
-# wall_map      : Vector2i -> Array (blocked exit directions, from block_ne/se/sw/nw)
+# wall_map      : Vector2i -> Array (blocked exit directions, from block_left/right)
 # blocked_cells : Vector2i -> true  (whole cell excluded from play, from is_blocked)
 var floor_map: Dictionary = {}
 var ramp_map:  Dictionary = {}
@@ -118,36 +116,27 @@ func _build_level_from_tilemap() -> void:
 				goal_pos  = cell
 				goal_elev = elev
 
-			# Four named ramp bools — tick the one matching the direction the
-			# player presses to walk UP this ramp.
-			# In Diamond-Down isometric:
-			#   ramp_ne → press move_up   (character moves upper-right)
-			#   ramp_se → press move_right (character moves lower-right)
-			#   ramp_sw → press move_down  (character moves lower-left)
-			#   ramp_nw → press move_left  (character moves upper-left)
+			# Two named ramp bools — ramps only ever run along the left/right
+			# diagonal. Tick the one matching the direction the player
+			# presses to walk UP this ramp.
+			#   ramp_left  → press move_left  (character moves upper-left)
+			#   ramp_right → press move_right (character moves lower-right)
 			# The ramp tile must be on the HIGHER elevation layer (the destination level).
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
-			if   _tile_bool(td, "ramp_ne"):
-				ramp_map[cell] = {"up_dir": DIR_UP,    "base": elev}
-			elif _tile_bool(td, "ramp_se"):
-				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
-			elif _tile_bool(td, "ramp_sw"):
-				ramp_map[cell] = {"up_dir": DIR_DOWN,  "base": elev}
-			elif _tile_bool(td, "ramp_nw"):
+			if   _tile_bool(td, "ramp_left"):
 				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
+			elif _tile_bool(td, "ramp_right"):
+				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
 
-			# Four named wall bools — tick one per side of the tile that should
-			# be a solid edge (e.g. the outer rim of a cube platform). Blocks
-			# movement across that face in BOTH directions.
-			#   block_ne → wall facing upper-right
-			#   block_se → wall facing lower-right
-			#   block_sw → wall facing lower-left
-			#   block_nw → wall facing upper-left
+			# Two named wall bools — tick one or both to wall off that side
+			# (e.g. the outer rim of a platform, or the missing half of a
+			# corner tile where the platform doesn't cover the full diamond).
+			# Blocks movement across that face in BOTH directions.
+			#   block_left  → wall facing upper-left
+			#   block_right → wall facing lower-right
 			var blocked_exits: Array = []
-			if _tile_bool(td, "block_ne"): blocked_exits.append(DIR_UP)
-			if _tile_bool(td, "block_se"): blocked_exits.append(DIR_RIGHT)
-			if _tile_bool(td, "block_sw"): blocked_exits.append(DIR_DOWN)
-			if _tile_bool(td, "block_nw"): blocked_exits.append(DIR_LEFT)
+			if _tile_bool(td, "block_left"):  blocked_exits.append(DIR_LEFT)
+			if _tile_bool(td, "block_right"): blocked_exits.append(DIR_RIGHT)
 			if not blocked_exits.is_empty():
 				wall_map[cell] = blocked_exits
 
