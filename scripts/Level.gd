@@ -26,6 +26,13 @@ var player_elev: int = 0
 # (Select the Level node — the root — to see this, not the TileMap node.)
 @export var tile_layer: TileMapLayer
 
+# Optional. Purely cosmetic tiles (e.g. ground peeking out beside a
+# platform) that never need to be walkable or dynamically sorted against
+# the player/blocks — always drawn behind tile_layer (see _ready) and
+# never read by _build_level_from_tilemap. Give it its own node position
+# in the editor if it needs a different visual offset than tile_layer.
+@export var decor_layer: TileMapLayer
+
 # Set these to match cell coordinates in your TileMap.
 # Hover over a cell in the TileMap editor to see its (col, row) coords.
 @export var player_start_cell: Vector2i = Vector2i(0, 0)
@@ -63,6 +70,12 @@ func _ready() -> void:
 	# so tiles, player, and blocks all share one Y-sort scope and sort
 	# correctly against each other regardless of elevation.
 	tile_layer.y_sort_enabled = true
+
+	# Decor is purely cosmetic and never read into gameplay data — pin it
+	# behind tile_layer and every entity with a fixed z_index instead of
+	# giving it a Y-sort scope of its own.
+	if decor_layer != null:
+		decor_layer.z_index = -1
 
 	_check_available_custom_data()
 	_build_level_from_tilemap()
