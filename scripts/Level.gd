@@ -22,11 +22,9 @@ var goal_elev: int
 var player_pos:  Vector2i
 var player_elev: int = 0
 
-# Drag each TileMapLayer from the Scene panel into these slots in the Inspector.
-# (Select the Level node — the root — to see these, not the TileMap node.)
-@export var layer_elev_0: TileMapLayer  # ground floor
-@export var layer_elev_1: TileMapLayer  # one step up
-@export var layer_elev_2: TileMapLayer  # two steps up
+# Drag the TileMapLayer from the Scene panel into this slot in the Inspector.
+# (Select the Level node — the root — to see this, not the TileMap node.)
+@export var tile_layer: TileMapLayer
 
 # Set these to match cell coordinates in your TileMap.
 # Hover over a cell in the TileMap editor to see its (col, row) coords.
@@ -34,9 +32,6 @@ var player_elev: int = 0
 @export var block_spawn_cells: Array[Vector2i] = []
 
 @onready var player: Node2D = $EntitiesRoot/Player
-
-# Built from the three exports above in _ready()
-var _layers: Array[TileMapLayer] = []
 
 var block_scene: PackedScene
 
@@ -56,33 +51,25 @@ func _ready() -> void:
 	if block_scene == null:
 		push_error("Level: could not load res://scenes/Block.tscn")
 
-	# Collect only the layers that were assigned in the Inspector
-	_layers.clear()
-	for l: TileMapLayer in [layer_elev_0, layer_elev_1, layer_elev_2]:
-		if l != null:
-			_layers.append(l)
-
-	if _layers.is_empty():
-		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
+	if tile_layer == null:
+		push_error("Level: no TileMapLayer assigned — drag it into Tile Layer on the Level node")
 		return
 
-	# Y-sort so draw order between entities (player, blocks) follows screen
-	# depth (global Y) instead of a fixed per-node z_index. Tiles within a
-	# layer Y-sort against each other too, but NOT against entities on a
-	# different layer — TileMapLayer only Y-sorts tiles against its own
-	# direct child nodes (godotengine/godot#69261). Anything that needs to
-	# dynamically occlude/be occluded by the player (a raised obstacle with
-	# a visible face, etc.) should be its own entity like Block, not a tile.
-	y_sort_enabled = true
-	for l in _layers:
-		l.y_sort_enabled = true
+	# Y-sort on the layer itself so its tiles draw in the same depth order as
+	# Player/Block. TileMapLayer only Y-sorts tiles against its own direct
+	# child nodes, never against siblings elsewhere in the tree — even under
+	# a shared y_sort_enabled ancestor (godotengine/godot#69261). Player and
+	# Block are reparented into this layer (see _init_entities/_spawn_block)
+	# so tiles, player, and blocks all share one Y-sort scope and sort
+	# correctly against each other regardless of elevation.
+	tile_layer.y_sort_enabled = true
 
 	_check_available_custom_data()
 	_build_level_from_tilemap()
 	_init_entities()
 
 func _check_available_custom_data() -> void:
-	var ts: TileSet = _layers[0].tile_set
+	var ts: TileSet = tile_layer.tile_set
 	if ts == null:
 		return
 	for i in ts.get_custom_data_layers_count():
@@ -98,6 +85,15 @@ func _tile_bool(td: TileData, data_name: String) -> bool:
 		return false
 	return bool(td.get_custom_data(data_name))
 
+# Elevation now comes from a per-tile "elevation" custom data int instead of
+# which TileMapLayer a cell was painted on, since there's only one layer.
+# Defaults to 0 so a TileSet that hasn't had the field added yet still works
+# as plain ground level.
+func _tile_elevation(td: TileData) -> int:
+	if not _available_custom_data.has("elevation"):
+		return 0
+	return int(td.get_custom_data("elevation"))
+
 # =============================================================================
 # Level data — read from TileMapLayer, no hardcoded layouts
 # =============================================================================
@@ -108,50 +104,48 @@ func _build_level_from_tilemap() -> void:
 	wall_map.clear()
 	blocked_cells.clear()
 
-	for elev in _layers.size():
-		var layer := _layers[elev]
-		if layer == null:
+	for cell: Vector2i in tile_layer.get_used_cells():
+		var td := tile_layer.get_cell_tile_data(cell)
+		if td == null:
 			continue
-		for cell: Vector2i in layer.get_used_cells():
-			var td := layer.get_cell_tile_data(cell)
-			if td == null:
-				continue
 
-			# is_blocked excludes this cell from play entirely — the tile can
-			# still be painted for visuals (e.g. a decorative area, the strip
-			# around a cube platform's base) but the player and blocks can
-			# never enter it, regardless of elevation rules.
-			if _tile_bool(td, "is_blocked"):
-				floor_map.erase(cell)
-				blocked_cells[cell] = true
-				continue
-			blocked_cells.erase(cell)
+		var elev := _tile_elevation(td)
 
-			floor_map[cell] = elev
+		# is_blocked excludes this cell from play entirely — the tile can
+		# still be painted for visuals (e.g. a decorative area, the strip
+		# around a cube platform's base) but the player and blocks can
+		# never enter it, regardless of elevation rules.
+		if _tile_bool(td, "is_blocked"):
+			floor_map.erase(cell)
+			blocked_cells[cell] = true
+			continue
+		blocked_cells.erase(cell)
 
-			if _tile_bool(td, "is_goal"):
-				goal_pos  = cell
-				goal_elev = elev
+		floor_map[cell] = elev
 
-			# Two named ramp bools — ramps run along the up/down diagonal.
-			# Tick the one matching the direction the player presses to
-			# walk UP this ramp.
-			#   ramp_left  → press move_sw (character moves lower-left)
-			#   ramp_right → press move_ne (character moves upper-right)
-			# The ramp tile must be on the HIGHER elevation layer (the destination level).
-			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
-			if   _tile_bool(td, "ramp_left"):
-				ramp_map[cell] = {"up_dir": IsoDir.SW, "base": elev}
-				print("Level: registered ramp_left at %s, base=%d" % [cell, elev])
-			elif _tile_bool(td, "ramp_right"):
-				ramp_map[cell] = {"up_dir": IsoDir.NE, "base": elev}
-				print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
+		if _tile_bool(td, "is_goal"):
+			goal_pos  = cell
+			goal_elev = elev
 
-			# Walls come from the tile's own collision shape instead of
-			# hand-set flags — see _walls_from_collision().
-			var blocked_exits := _walls_from_collision(cell, td)
-			if not blocked_exits.is_empty():
-				wall_map[cell] = blocked_exits
+		# Two named ramp bools — ramps run along the up/down diagonal.
+		# Tick the one matching the direction the player presses to
+		# walk UP this ramp.
+		#   ramp_left  → press move_sw (character moves lower-left)
+		#   ramp_right → press move_ne (character moves upper-right)
+		# The ramp tile's own "elevation" custom data is its destination
+		# elevation (the level it rises TO).
+		if   _tile_bool(td, "ramp_left"):
+			ramp_map[cell] = {"up_dir": IsoDir.SW, "base": elev}
+			print("Level: registered ramp_left at %s, base=%d" % [cell, elev])
+		elif _tile_bool(td, "ramp_right"):
+			ramp_map[cell] = {"up_dir": IsoDir.NE, "base": elev}
+			print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
+
+		# Walls come from the tile's own collision shape instead of
+		# hand-set flags — see _walls_from_collision().
+		var blocked_exits := _walls_from_collision(cell, td)
+		if not blocked_exits.is_empty():
+			wall_map[cell] = blocked_exits
 
 # Walls are derived from the tile's TileSet Physics Layer 0 collision shape
 # instead of hand-ticked flags: draw the WALKABLE portion of the tile (e.g.
@@ -184,16 +178,14 @@ func _walls_from_collision(cell: Vector2i, td: TileData) -> Array:
 # =============================================================================
 
 func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
-	# Use the correct layer for this elevation, then convert its local-space
-	# tile centre all the way back to Level's local space (handles any layer
-	# offsets the user has set in the editor for the visual elevation look).
-	var layer := get_elev_layer(elev)
-	# map_to_local returns the top vertex of the isometric diamond;
-	# add half tile height to reach the visual centre.
-	return to_local(layer.to_global(layer.map_to_local(pos))) + Vector2(0.0, TILE_H * 0.5)
-
-func get_elev_layer(elev: int) -> TileMapLayer:
-	return _layers[clampi(elev, 0, _layers.size() - 1)]
+	# map_to_local returns the top vertex of the isometric diamond; add half
+	# tile height to reach the visual centre, then lift by elevation. With
+	# every elevation now painted on one shared layer there's no separate
+	# per-layer node position to derive that lift from automatically, so
+	# it's applied manually here — must match whatever Texture Origin lifts
+	# the tile graphics themselves (see migration notes).
+	var base := to_local(tile_layer.to_global(tile_layer.map_to_local(pos)))
+	return base + Vector2(0.0, TILE_H * 0.5 - elev * ELEV_H)
 
 # =============================================================================
 # Entity initialisation
@@ -203,7 +195,7 @@ func _init_entities() -> void:
 	player_pos  = player_start_cell
 	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
-	player.reparent(self)
+	player.reparent(tile_layer)
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
@@ -212,7 +204,7 @@ func _init_entities() -> void:
 
 func _spawn_block(pos: Vector2i) -> void:
 	var block: Node2D = block_scene.instantiate()
-	add_child(block)
+	tile_layer.add_child(block)
 	block_map[pos] = block
 	block.level = self
 	block.set_grid_pos(pos, floor_map.get(pos, 0))
