@@ -209,6 +209,8 @@ func _init_entities() -> void:
 	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
 	player.reparent(tile_layer)
+	# z_index must be 0 so Y-sort (not z buckets) controls draw order vs tiles/blocks
+	player.z_index = 0
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
@@ -220,6 +222,8 @@ func _spawn_block(pos: Vector2i) -> void:
 	tile_layer.add_child(block)
 	block_map[pos] = block
 	block.level = self
+	# z_index must be 0 so Y-sort (not z buckets) controls draw order vs tiles/player
+	block.z_index = 0
 	block.set_grid_pos(pos, floor_map.get(pos, 0))
 
 # =============================================================================
