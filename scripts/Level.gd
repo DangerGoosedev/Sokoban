@@ -75,6 +75,7 @@ func _check_available_custom_data() -> void:
 		return
 	for i in ts.get_custom_data_layers_count():
 		_available_custom_data[ts.get_custom_data_layer_name(i)] = true
+	print("Level: available custom data layers = ", _available_custom_data.keys())
 
 func _tile_bool(td: TileData, data_name: String) -> bool:
 	if not _available_custom_data.has(data_name):
@@ -125,8 +126,10 @@ func _build_level_from_tilemap() -> void:
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
 			if   _tile_bool(td, "ramp_left"):
 				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
+				print("Level: registered ramp_left at %s, base=%d" % [cell, elev])
 			elif _tile_bool(td, "ramp_right"):
 				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
+				print("Level: registered ramp_right at %s, base=%d" % [cell, elev])
 
 			# Two named wall bools — tick one or both to wall off that side
 			# (e.g. the outer rim of a platform, or the missing half of a
@@ -222,6 +225,7 @@ func _resolve_step(from_elev: int, to_pos: Vector2i,
 		var r: Dictionary = ramp_map[to_pos]
 		if r.up_dir == dir and r.base - 1 == from_elev:
 			return r.base
+		print("Ramp at %s: need up_dir=%s(got %s) base-1=%d(at %d)" % [to_pos, dir, r.up_dir, r.base - 1, from_elev])
 	var diff := dest_surface - from_elev
 	if diff > 0:  return -1
 	if diff == 0: return dest_surface
