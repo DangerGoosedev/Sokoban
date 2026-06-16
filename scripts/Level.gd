@@ -26,6 +26,11 @@ var player_elev: int = 0
 @export var layer_elev_1: TileMapLayer  # one step up
 @export var layer_elev_2: TileMapLayer  # two steps up
 
+# Set these to match cell coordinates in your TileMap.
+# Hover over a cell in the TileMap editor to see its (col, row) coords.
+@export var player_start_cell: Vector2i = Vector2i(0, 0)
+@export var block_spawn_cells: Array[Vector2i] = []
+
 @onready var entities_root: Node2D = $EntitiesRoot
 @onready var player:        Node2D = $EntitiesRoot/Player
 
@@ -101,16 +106,14 @@ func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
 # =============================================================================
 
 func _init_entities() -> void:
-	# Player start and block spawn positions are still set here.
-	# Tip: add custom data flags "player_start" and "block_spawn" to your
-	# TileSet and read them the same way as is_goal/is_ramp when you're ready.
-	player_pos  = Vector2i(0, 0)
-	player_elev = 0
+	player_pos  = player_start_cell
+	player_elev = floor_map.get(player_start_cell, 0)
 	player.level = self
 	player.set_grid_pos(player_pos, player_elev)
 
 	if block_scene != null:
-		_spawn_block(Vector2i(1, 0))
+		for cell in block_spawn_cells:
+			_spawn_block(cell)
 
 func _spawn_block(pos: Vector2i) -> void:
 	var block: Node2D = block_scene.instantiate()
