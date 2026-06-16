@@ -11,8 +11,12 @@ const C_RIGHT := Color(0.28, 0.44, 0.67)
 var grid_pos:       Vector2i
 var base_elevation: int = 0
 
-var level:         Node = null
-var tile_registry          = null  # set by Level.gd before add_child
+var level: Node = null
+
+# Drag a full isometric cube sprite (top + both side faces already drawn) here.
+# Swap this for an AnimatedSprite2D/SpriteFrames setup later if you add
+# animated blocks — set_grid_pos() doesn't care what's inside _build_visual().
+@export var block_texture: Texture2D
 
 func _ready() -> void:
 	_build_visual()
@@ -24,19 +28,19 @@ func set_grid_pos(pos: Vector2i, base_elev: int) -> void:
 	z_index  = (pos.x + pos.y) * 10 + base_elev * 5 + 3
 
 func _build_visual() -> void:
+	if block_texture != null:
+		var sprite := Sprite2D.new()
+		sprite.texture = block_texture
+		# Anchor the image's bottom-centre at the tile surface (y=0), matching
+		# the side faces' base below — independent of the PNG's pixel size.
+		sprite.centered = false
+		sprite.position = Vector2(-block_texture.get_width() * 0.5, -block_texture.get_height())
+		add_child(sprite)
+		return
+
 	var hw := TILE_W * 0.5   # 16
 	var hh := TILE_H * 0.5   #  8
 	var bh := ELEV_H          # 12 — cube height
-
-	# --- Sprite top face (if TileRegistry is assigned) ---
-	if tile_registry != null:
-		var sprite := tile_registry.make_sprite("block_top")
-		if sprite != null:
-			# Position sprite so its centre sits at the top face's diamond centre (y = -bh)
-			sprite.position = Vector2(0, -bh)
-			add_child(sprite)
-			_add_side_faces(hw, hh, bh)
-			return
 
 	# --- Polygon fallback: full isometric cube ---
 	var top_face := Polygon2D.new()
