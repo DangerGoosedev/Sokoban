@@ -20,9 +20,13 @@ var goal_elev: int
 var player_pos:  Vector2i
 var player_elev: int = 0
 
-@onready var tile_map:      TileMapLayer = $TileMapLayer
-@onready var entities_root: Node2D       = $EntitiesRoot
-@onready var player:        Node2D       = $EntitiesRoot/Player
+# Assign your TileMapLayers here in the Inspector, index = elevation level.
+# e.g. index 0 = ground floor, index 1 = one step up, index 2 = two steps up.
+# Each layer should be offset upward by ELEV_H per level (set in the editor).
+@export var elevation_layers: Array[TileMapLayer] = []
+
+@onready var entities_root: Node2D = $EntitiesRoot
+@onready var player:        Node2D = $EntitiesRoot/Player
 
 var block_scene: PackedScene
 
@@ -43,33 +47,44 @@ func _build_level_from_tilemap() -> void:
 	floor_map.clear()
 	ramp_map.clear()
 
-	for cell: Vector2i in tile_map.get_used_cells():
-		var td := tile_map.get_cell_tile_data(cell)
-		if td == null:
+	if elevation_layers.is_empty():
+		push_error("Level: elevation_layers is empty — assign your TileMapLayers in the Inspector")
+		return
+
+	# Each layer's index is its logical elevation (layer 0 = elev 0, layer 1 = elev 1, …)
+	for elev in elevation_layers.size():
+		var layer := elevation_layers[elev]
+		if layer == null:
 			continue
+		for cell: Vector2i in layer.get_used_cells():
+			var td := layer.get_cell_tile_data(cell)
+			if td == null:
+				continue
 
-		var elev: int = int(td.get_custom_data("elevation"))
-		floor_map[cell] = elev
+			floor_map[cell] = elev
 
-		if bool(td.get_custom_data("is_goal")):
-			goal_pos  = cell
-			goal_elev = elev
+			if bool(td.get_custom_data("is_goal")):
+				goal_pos  = cell
+				goal_elev = elev
 
-		if bool(td.get_custom_data("is_ramp")):
-			var dirs := [DIR_RIGHT, DIR_LEFT, DIR_UP, DIR_DOWN]
-			ramp_map[cell] = {
-				"up_dir": dirs[clampi(int(td.get_custom_data("ramp_dir")), 0, 3)],
-				"base":   elev,
-			}
+			if bool(td.get_custom_data("is_ramp")):
+				var dirs := [DIR_RIGHT, DIR_LEFT, DIR_UP, DIR_DOWN]
+				ramp_map[cell] = {
+					"up_dir": dirs[clampi(int(td.get_custom_data("ramp_dir")), 0, 3)],
+					"base":   elev,
+				}
 
 # =============================================================================
 # Coordinate conversion — delegates to TileMap so entities align with tiles
 # =============================================================================
 
 func grid_to_screen(pos: Vector2i, elev: int = 0) -> Vector2:
-	# map_to_local gives the tile centre in TileMapLayer's local space.
-	# Elevation shifts upward (negative Y) by ELEV_H per level.
-	return tile_map.map_to_local(pos) - Vector2(0.0, elev * ELEV_H)
+	# Use the correct layer for this elevation, then convert its local-space
+	# tile centre all the way back to Level's local space (handles any layer
+	# offsets the user has set in the editor for the visual elevation look).
+	var idx   := clampi(elev, 0, elevation_layers.size() - 1)
+	var layer := elevation_layers[idx]
+	return to_local(layer.to_global(layer.map_to_local(pos)))
 
 # =============================================================================
 # Entity initialisation
