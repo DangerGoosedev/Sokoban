@@ -9,14 +9,16 @@ const DIR_LEFT  := Vector2i(-1,  0)
 const DIR_UP    := Vector2i( 0, -1)
 const DIR_DOWN  := Vector2i( 0,  1)
 
-# floor_map : Vector2i -> int   (ground elevation; absent = gap/void)
-# ramp_map  : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
-# block_map : Vector2i -> Node  (Block node at that cell)
-# wall_map  : Vector2i -> Array (blocked exit directions, from block_ne/se/sw/nw)
+# floor_map     : Vector2i -> int   (ground elevation; absent = gap/void)
+# ramp_map      : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
+# block_map     : Vector2i -> Node  (Block node at that cell)
+# wall_map      : Vector2i -> Array (blocked exit directions, from block_ne/se/sw/nw)
+# blocked_cells : Vector2i -> true  (whole cell excluded from play, from is_blocked)
 var floor_map: Dictionary = {}
 var ramp_map:  Dictionary = {}
 var block_map: Dictionary = {}
 var wall_map:  Dictionary = {}
+var blocked_cells: Dictionary = {}
 
 var goal_pos:  Vector2i
 var goal_elev: int
@@ -89,6 +91,7 @@ func _build_level_from_tilemap() -> void:
 	floor_map.clear()
 	ramp_map.clear()
 	wall_map.clear()
+	blocked_cells.clear()
 
 	for elev in _layers.size():
 		var layer := _layers[elev]
@@ -98,6 +101,16 @@ func _build_level_from_tilemap() -> void:
 			var td := layer.get_cell_tile_data(cell)
 			if td == null:
 				continue
+
+			# is_blocked excludes this cell from play entirely — the tile can
+			# still be painted for visuals (e.g. a decorative area, the strip
+			# around a cube platform's base) but the player and blocks can
+			# never enter it, regardless of elevation rules.
+			if _tile_bool(td, "is_blocked"):
+				floor_map.erase(cell)
+				blocked_cells[cell] = true
+				continue
+			blocked_cells.erase(cell)
 
 			floor_map[cell] = elev
 
@@ -181,6 +194,10 @@ func _spawn_block(pos: Vector2i) -> void:
 func request_move(dir: Vector2i) -> void:
 	var to_pos := player_pos + dir
 
+	# Whole-cell exclusion — is_blocked areas are never enterable.
+	if blocked_cells.has(to_pos):
+		return
+
 	# Wall check — a block_* flag on either tile makes that shared face solid.
 	if wall_map.has(player_pos) and dir in wall_map[player_pos]:
 		return
@@ -236,6 +253,8 @@ func _try_push(block_pos: Vector2i, dir: Vector2i) -> bool:
 	if player_elev != block_base:
 		return false
 	var dest := block_pos + dir
+	if blocked_cells.has(dest):
+		return false
 	if block_map.has(dest):
 		return false
 	var dest_floor: int = floor_map.get(dest, -1)
