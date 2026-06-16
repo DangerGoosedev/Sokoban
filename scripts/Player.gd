@@ -24,11 +24,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().quit()
 		return
 
+	# Named by screen diagonal, not arrow-key direction — in this isometric
+	# view none of the four moves is a straight up/down/left/right on screen.
 	var dir := Vector2i.ZERO
-	if   event.is_action_pressed("move_right"): dir = Vector2i( 1,  0)
-	elif event.is_action_pressed("move_left"):  dir = Vector2i(-1,  0)
-	elif event.is_action_pressed("move_up"):    dir = Vector2i( 0, -1)
-	elif event.is_action_pressed("move_down"):  dir = Vector2i( 0,  1)
+	if   event.is_action_pressed("move_se"): dir = Vector2i( 1,  0)
+	elif event.is_action_pressed("move_nw"): dir = Vector2i(-1,  0)
+	elif event.is_action_pressed("move_ne"): dir = Vector2i( 0, -1)
+	elif event.is_action_pressed("move_sw"): dir = Vector2i( 0,  1)
 
 	if dir != Vector2i.ZERO and level != null:
 		level.request_move(dir)

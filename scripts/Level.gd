@@ -120,8 +120,8 @@ func _build_level_from_tilemap() -> void:
 			# Two named ramp bools — ramps only ever run along the left/right
 			# diagonal. Tick the one matching the direction the player
 			# presses to walk UP this ramp.
-			#   ramp_left  → press move_left  (character moves upper-left)
-			#   ramp_right → press move_right (character moves lower-right)
+			#   ramp_left  → press move_nw (character moves upper-left)
+			#   ramp_right → press move_se (character moves lower-right)
 			# The ramp tile must be on the HIGHER elevation layer (the destination level).
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
 			if   _tile_bool(td, "ramp_left"):
