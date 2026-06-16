@@ -102,12 +102,6 @@ func _build_level_from_tilemap() -> void:
 			elif bool(td.get_custom_data("ramp_nw")):
 				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
 
-	print("Level loaded: %d floor tiles, %d ramp(s)" % [floor_map.size(), ramp_map.size()])
-	for cell: Vector2i in ramp_map:
-		var r: Dictionary = ramp_map[cell]
-		print("  ramp at %s  up_dir=%s  base_elev=%d" % [cell, r.up_dir, r.base])
-	if ramp_map.is_empty():
-		push_warning("Level: no ramps found — make sure ramp tiles have ramp_ne/se/sw/nw custom data set to true in the TileSet")
 
 # =============================================================================
 # Coordinate conversion — delegates to TileMap so entities align with tiles
@@ -178,13 +172,22 @@ func _resolve_step(from_elev: int, to_pos: Vector2i,
 		dest_surface: int, dir: Vector2i) -> int:
 	if ramp_map.has(to_pos):
 		var r: Dictionary = ramp_map[to_pos]
-		print("Ramp at %s: need up_dir=%s(got %s) base-1=%d(at %d)" % [to_pos, r.up_dir, dir, r.base - 1, from_elev])
 		if r.up_dir == dir and r.base - 1 == from_elev:
 			return r.base
 	var diff := dest_surface - from_elev
-	if diff > 0: return -1
-	if diff < -1: return -1
-	return dest_surface
+	if diff > 0:  return -1
+	if diff == 0: return dest_surface
+	# diff < 0 — descending is only allowed in two specific cases:
+	if diff == -1:
+		# Walking down off a ramp the player is standing on
+		if ramp_map.has(player_pos):
+			var r: Dictionary = ramp_map[player_pos]
+			if r.up_dir == -dir and r.base == from_elev:
+				return dest_surface
+		# Stepping down onto a block sitting in a void (block-bridge mechanic)
+		if block_map.has(to_pos):
+			return dest_surface
+	return -1
 
 func _try_push(block_pos: Vector2i, dir: Vector2i) -> bool:
 	var block_base: int = floor_map.get(block_pos, 0)
