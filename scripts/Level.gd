@@ -12,9 +12,11 @@ const DIR_DOWN  := Vector2i( 0,  1)
 # floor_map : Vector2i -> int   (ground elevation; absent = gap/void)
 # ramp_map  : Vector2i -> Dict  ({up_dir: Vector2i, base: int})
 # block_map : Vector2i -> Node  (Block node at that cell)
+# wall_map  : Vector2i -> Array (blocked exit directions, from block_ne/se/sw/nw)
 var floor_map: Dictionary = {}
 var ramp_map:  Dictionary = {}
 var block_map: Dictionary = {}
+var wall_map:  Dictionary = {}
 
 var goal_pos:  Vector2i
 var goal_elev: int
@@ -41,6 +43,11 @@ var _layers: Array[TileMapLayer] = []
 
 var block_scene: PackedScene
 
+# Names of custom data layers that actually exist on the TileSet, so missing
+# ones (e.g. wall data the user hasn't added yet) are skipped instead of
+# spamming "invalid custom data layer" errors.
+var _available_custom_data: Dictionary = {}
+
 signal level_complete
 
 func _ready() -> void:
@@ -58,8 +65,21 @@ func _ready() -> void:
 		push_error("Level: no TileMapLayers assigned — drag them into Layer Elev 0/1/2 on the Level node")
 		return
 
+	_check_available_custom_data()
 	_build_level_from_tilemap()
 	_init_entities()
+
+func _check_available_custom_data() -> void:
+	var ts: TileSet = _layers[0].tile_set
+	if ts == null:
+		return
+	for i in ts.get_custom_data_layers_count():
+		_available_custom_data[ts.get_custom_data_layer_name(i)] = true
+
+func _tile_bool(td: TileData, data_name: String) -> bool:
+	if not _available_custom_data.has(data_name):
+		return false
+	return bool(td.get_custom_data(data_name))
 
 # =============================================================================
 # Level data — read from TileMapLayer, no hardcoded layouts
@@ -68,6 +88,7 @@ func _ready() -> void:
 func _build_level_from_tilemap() -> void:
 	floor_map.clear()
 	ramp_map.clear()
+	wall_map.clear()
 
 	for elev in _layers.size():
 		var layer := _layers[elev]
@@ -80,7 +101,7 @@ func _build_level_from_tilemap() -> void:
 
 			floor_map[cell] = elev
 
-			if bool(td.get_custom_data("is_goal")):
+			if _tile_bool(td, "is_goal"):
 				goal_pos  = cell
 				goal_elev = elev
 
@@ -93,14 +114,29 @@ func _build_level_from_tilemap() -> void:
 			#   ramp_nw → press move_left  (character moves upper-left)
 			# The ramp tile must be on the HIGHER elevation layer (the destination level).
 			# e.g. a ramp going from elev 0 to elev 1 belongs on layer_elev_1.
-			if   bool(td.get_custom_data("ramp_ne")):
+			if   _tile_bool(td, "ramp_ne"):
 				ramp_map[cell] = {"up_dir": DIR_UP,    "base": elev}
-			elif bool(td.get_custom_data("ramp_se")):
+			elif _tile_bool(td, "ramp_se"):
 				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
-			elif bool(td.get_custom_data("ramp_sw")):
+			elif _tile_bool(td, "ramp_sw"):
 				ramp_map[cell] = {"up_dir": DIR_DOWN,  "base": elev}
-			elif bool(td.get_custom_data("ramp_nw")):
+			elif _tile_bool(td, "ramp_nw"):
 				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
+
+			# Four named wall bools — tick one per side of the tile that should
+			# be a solid edge (e.g. the outer rim of a cube platform). Blocks
+			# movement across that face in BOTH directions.
+			#   block_ne → wall facing upper-right
+			#   block_se → wall facing lower-right
+			#   block_sw → wall facing lower-left
+			#   block_nw → wall facing upper-left
+			var blocked_exits: Array = []
+			if _tile_bool(td, "block_ne"): blocked_exits.append(DIR_UP)
+			if _tile_bool(td, "block_se"): blocked_exits.append(DIR_RIGHT)
+			if _tile_bool(td, "block_sw"): blocked_exits.append(DIR_DOWN)
+			if _tile_bool(td, "block_nw"): blocked_exits.append(DIR_LEFT)
+			if not blocked_exits.is_empty():
+				wall_map[cell] = blocked_exits
 
 
 # =============================================================================
@@ -144,6 +180,12 @@ func _spawn_block(pos: Vector2i) -> void:
 
 func request_move(dir: Vector2i) -> void:
 	var to_pos := player_pos + dir
+
+	# Wall check — a block_* flag on either tile makes that shared face solid.
+	if wall_map.has(player_pos) and dir in wall_map[player_pos]:
+		return
+	if wall_map.has(to_pos) and -dir in wall_map[to_pos]:
+		return
 
 	if block_map.has(to_pos) and floor_map.has(to_pos):
 		if not _try_push(to_pos, dir):
