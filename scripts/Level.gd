@@ -82,12 +82,22 @@ func _build_level_from_tilemap() -> void:
 				goal_pos  = cell
 				goal_elev = elev
 
-			if bool(td.get_custom_data("is_ramp")):
-				var dirs := [DIR_RIGHT, DIR_LEFT, DIR_UP, DIR_DOWN]
-				ramp_map[cell] = {
-					"up_dir": dirs[clampi(int(td.get_custom_data("ramp_dir")), 0, 3)],
-					"base":   elev,
-				}
+			# Four named ramp bools — tick the one matching the direction the
+			# player presses to walk UP this ramp.
+			# In Diamond-Down isometric:
+			#   ramp_ne → press move_up   (character moves upper-right)
+			#   ramp_se → press move_right (character moves lower-right)
+			#   ramp_sw → press move_down  (character moves lower-left)
+			#   ramp_nw → press move_left  (character moves upper-left)
+			# The ramp tile must be on the LOWER elevation layer (the base level).
+			if   bool(td.get_custom_data("ramp_ne")):
+				ramp_map[cell] = {"up_dir": DIR_UP,    "base": elev}
+			elif bool(td.get_custom_data("ramp_se")):
+				ramp_map[cell] = {"up_dir": DIR_RIGHT, "base": elev}
+			elif bool(td.get_custom_data("ramp_sw")):
+				ramp_map[cell] = {"up_dir": DIR_DOWN,  "base": elev}
+			elif bool(td.get_custom_data("ramp_nw")):
+				ramp_map[cell] = {"up_dir": DIR_LEFT,  "base": elev}
 
 # =============================================================================
 # Coordinate conversion — delegates to TileMap so entities align with tiles
